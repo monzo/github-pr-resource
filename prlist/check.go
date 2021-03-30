@@ -11,15 +11,13 @@ import (
 )
 
 func Check(request CheckRequest, manager models.Github) (CheckResponse, error) {
-	var pulls []*models.PullRequest
-	var err error
 	// Filter out pull request if it does not have a filtered state
 	filterStates := []githubv4.PullRequestState{githubv4.PullRequestStateOpen}
 	if len(request.Source.States) > 0 {
 		filterStates = request.Source.States
 	}
 
-	pulls, err = manager.ListPullRequests(filterStates)
+	pulls, err := manager.ListPullRequests(filterStates, request.Source.Branch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last commits: %s", err)
 	}

@@ -24,6 +24,7 @@ type Source struct {
 	GitCryptKey             string                      `json:"git_crypt_key"`
 	Labels                  []string                    `json:"labels"`
 	States                  []githubv4.PullRequestState `json:"states"`
+	Branch                  string                      `json:"branch"`
 }
 
 // Validate the source configuration.

@@ -332,6 +332,26 @@ func TestCheck(t *testing.T) {
 				prlist.Version{PRs: "[10,11]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
 			},
 		},
+
+		{
+			description: "check filters out versions from a PR which do not match the branch filter",
+			source: prlist.Source{
+				GithubConfig: models.GithubConfig{
+					Repository: "itsdalmo/test-repository",
+				},
+				CommonConfig: models.CommonConfig{
+					AccessToken: "oauthtoken",
+				},
+				States: []githubv4.PullRequestState{githubv4.PullRequestStateClosed, githubv4.PullRequestStateMerged},
+			},
+			version:      &prlist.Version{PRs: "[12]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			pullRequests: testPullRequests,
+			files:        [][]string{},
+			expected: prlist.CheckResponse{
+				prlist.Version{PRs: "[12]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[10,11]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+			},
+		},
 	}
 
 	for _, tc := range tests {
