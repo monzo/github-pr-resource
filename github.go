@@ -400,7 +400,7 @@ func (m *GithubClient) DeletePreviousComments(prNumber string) error {
 	}
 
 	for _, e := range getComments.Repository.PullRequest.Comments.Edges {
-		if e.Node.Author.Login == getComments.Viewer.Login {
+		if cleanBotUserName(e.Node.Author.Login) == cleanBotUserName(getComments.Viewer.Login) {
 			_, err := m.V3.Issues.DeleteComment(context.TODO(), m.Owner, m.Repository, e.Node.DatabaseId)
 			if err != nil {
 				return err
@@ -417,4 +417,11 @@ func parseRepository(s string) (string, string, error) {
 		return "", "", errors.New("malformed repository")
 	}
 	return parts[0], parts[1], nil
+}
+
+func cleanBotUserName(username string) string{
+	if strings.HasSuffix(username, "[bot]"){
+		return strings.TrimSuffix(username, "[bot]")
+	}
+	return username
 }
