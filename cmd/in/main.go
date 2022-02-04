@@ -29,7 +29,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create git client: %s", err)
 	}
-	github, err := resource.NewGithubClient(&request.Source)
+	github, err := resource.NewGithubClient(&request.Source, outputDir)
 	if err != nil {
 		log.Fatalf("failed to create github manager: %s", err)
 	}

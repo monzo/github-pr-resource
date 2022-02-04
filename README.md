@@ -75,6 +75,7 @@ generate notifications over the webhook. So if you have a repository with little
 | `submodules`       | No       | `true` | Recursively clone git submodules. Defaults to false.                        |
 | `list_changed_files` | No       | `true`   | Generate a list of changed files and save alongside metadata                       |
 | `fetch_tags`       | No       | `true`     | Fetch tags from remote repository                                                  |
+| `download_tarball_via_api`       | No       | `true`     | Use the Github API to download and unpack a tarball instead of using git fetch. Much faster for large repositories. |
 
 Clones the base (e.g. `master` branch) at the latest commit, and merges the pull request at the specified commit
 into master. This ensures that we are both testing and setting status on the exact commit that was requested in

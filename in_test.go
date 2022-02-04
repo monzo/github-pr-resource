@@ -154,12 +154,34 @@ func TestGet(t *testing.T) {
 			metadataString: `[{"name":"pr","value":"1"},{"name":"title","value":"pr1 title"},{"name":"url","value":"pr1 url"},{"name":"head_name","value":"pr1"},{"name":"head_sha","value":"oid1"},{"name":"base_name","value":"master"},{"name":"base_sha","value":"sha"},{"name":"message","value":"commit message1"},{"name":"author","value":"login1"},{"name":"author_email","value":"user@example.com"},{"name":"state","value":"OPEN"}]`,
 			filesString:    "README.md\nOther.md\n",
 		},
+		{
+			description: "get supports download_tarball_via_api",
+			source: resource.Source{
+				Repository:  "itsdalmo/test-repository",
+				AccessToken: "oauthtoken",
+			},
+			version: resource.Version{
+				PR:                  "pr1",
+				Commit:              "commit1",
+				CommittedDate:       time.Time{},
+				ApprovedReviewCount: "0",
+				State:               githubv4.PullRequestStateOpen,
+			},
+			parameters: resource.GetParameters{
+				DownloadTarballViaAPI: true,
+			},
+			pullRequest:    createTestPR(1, "master", false, false, 0, nil, false, githubv4.PullRequestStateOpen),
+			versionString:  `{"pr":"pr1","commit":"commit1","committed":"0001-01-01T00:00:00Z","approved_review_count":"0","state":"OPEN"}`,
+			metadataString: `[{"name":"pr","value":"1"},{"name":"title","value":"pr1 title"},{"name":"url","value":"pr1 url"},{"name":"head_name","value":"pr1"},{"name":"head_sha","value":"oid1"},{"name":"base_name","value":"master"},{"name":"base_sha","value":"sha"},{"name":"message","value":"commit message1"},{"name":"author","value":"login1"},{"name":"author_email","value":"user@example.com"},{"name":"state","value":"OPEN"}]`,
+			filesString:    "README.md\nOther.md\n",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			github := new(fakes.FakeGithub)
 			github.GetPullRequestReturns(tc.pullRequest, nil)
+			github.GetLastSHAReturns("sha", nil)
 
 			if tc.files != nil {
 				github.GetChangedFilesReturns(tc.files, nil)
@@ -217,32 +239,39 @@ func TestGet(t *testing.T) {
 				assert.Equal(t, tc.version.Commit, commit)
 			}
 
-			// Validate Git calls
-			if assert.Equal(t, 1, git.InitCallCount()) {
-				base := git.InitArgsForCall(0)
-				assert.Equal(t, tc.pullRequest.BaseRefName, base)
-			}
+			if tc.parameters.DownloadTarballViaAPI {
+				if assert.Equal(t, 1, github.GetLastSHACallCount()) {
+					base := github.GetLastSHAArgsForCall(0)
+					assert.Equal(t, tc.pullRequest.BaseRefName, base)
+				}
+			} else {
+				// Validate Git calls
+				if assert.Equal(t, 1, git.InitCallCount()) {
+					base := git.InitArgsForCall(0)
+					assert.Equal(t, tc.pullRequest.BaseRefName, base)
+				}
 
-			if assert.Equal(t, 1, git.PullCallCount()) {
-				url, base, depth, submodules, fetchTags := git.PullArgsForCall(0)
-				assert.Equal(t, tc.pullRequest.Repository.URL, url)
-				assert.Equal(t, tc.pullRequest.BaseRefName, base)
-				assert.Equal(t, tc.parameters.GitDepth, depth)
-				assert.Equal(t, tc.parameters.Submodules, submodules)
-				assert.Equal(t, tc.parameters.FetchTags, fetchTags)
-			}
+				if assert.Equal(t, 1, git.PullCallCount()) {
+					url, base, depth, submodules, fetchTags := git.PullArgsForCall(0)
+					assert.Equal(t, tc.pullRequest.Repository.URL, url)
+					assert.Equal(t, tc.pullRequest.BaseRefName, base)
+					assert.Equal(t, tc.parameters.GitDepth, depth)
+					assert.Equal(t, tc.parameters.Submodules, submodules)
+					assert.Equal(t, tc.parameters.FetchTags, fetchTags)
+				}
 
-			if assert.Equal(t, 1, git.RevParseCallCount()) {
-				base := git.RevParseArgsForCall(0)
-				assert.Equal(t, tc.pullRequest.BaseRefName, base)
-			}
+				if assert.Equal(t, 1, git.RevParseCallCount()) {
+					base := git.RevParseArgsForCall(0)
+					assert.Equal(t, tc.pullRequest.BaseRefName, base)
+				}
 
-			if assert.Equal(t, 1, git.FetchCallCount()) {
-				url, pr, depth, submodules := git.FetchArgsForCall(0)
-				assert.Equal(t, tc.pullRequest.Repository.URL, url)
-				assert.Equal(t, tc.pullRequest.Number, pr)
-				assert.Equal(t, tc.parameters.GitDepth, depth)
-				assert.Equal(t, tc.parameters.Submodules, submodules)
+				if assert.Equal(t, 1, git.FetchCallCount()) {
+					url, pr, depth, submodules := git.FetchArgsForCall(0)
+					assert.Equal(t, tc.pullRequest.Repository.URL, url)
+					assert.Equal(t, tc.pullRequest.Number, pr)
+					assert.Equal(t, tc.parameters.GitDepth, depth)
+					assert.Equal(t, tc.parameters.Submodules, submodules)
+				}
 			}
 
 			switch tc.parameters.IntegrationTool {

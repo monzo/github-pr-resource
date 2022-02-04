@@ -1,18 +1,22 @@
 package resource
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/google/go-github/v28/github"
+	"github.com/google/go-github/v39/github"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 )
@@ -27,18 +31,21 @@ type Github interface {
 	GetChangedFiles(string, string) ([]ChangedFileObject, error)
 	UpdateCommitStatus(string, string, string, string, string, string) error
 	DeletePreviousComments(string) error
+	FetchViaTarball(string) error
+	GetLastSHA(string) (string, error)
 }
 
 // GithubClient for handling requests to the Github V3 and V4 APIs.
 type GithubClient struct {
 	V3         *github.Client
 	V4         *githubv4.Client
+	Directory  string
 	Repository string
 	Owner      string
 }
 
 // NewGithubClient ...
-func NewGithubClient(s *Source) (*GithubClient, error) {
+func NewGithubClient(s *Source, dir string) (*GithubClient, error) {
 	owner, repository, err := parseRepository(s.Repository)
 	if err != nil {
 		return nil, err
@@ -94,6 +101,7 @@ func NewGithubClient(s *Source) (*GithubClient, error) {
 		V4:         v4,
 		Owner:      owner,
 		Repository: repository,
+		Directory:  dir,
 	}, nil
 }
 
@@ -411,6 +419,47 @@ func (m *GithubClient) DeletePreviousComments(prNumber string) error {
 	return nil
 }
 
+func (m *GithubClient) FetchViaTarball(commitRef string) error {
+	link, _, err := m.V3.Repositories.GetArchiveLink(context.TODO(), m.Owner, m.Repository, github.Tarball, &github.RepositoryContentGetOptions{
+		Ref: commitRef,
+	}, true)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+
+	req, err := http.NewRequest("GET", link.String(), nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+	if err != nil {
+		return fmt.Errorf("couldn't create request: %v", err)
+	}
+
+	resp, err := m.V3.BareDo(ctx, req)
+	if err != nil {
+		return fmt.Errorf("couldn't do request: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("got status code %d", resp.StatusCode)
+	}
+	defer resp.Response.Body.Close()
+
+	if err := streamTarballToFileSystem(resp.Response.Body, m.Directory); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *GithubClient) GetLastSHA(branchName string) (string, error) {
+	branch, _, err := m.V3.Repositories.GetBranch(context.TODO(), m.Owner, m.Repository, branchName, true)
+	if err != nil {
+		return "", err
+	}
+
+	return branch.Commit.GetSHA(), nil
+}
+
 func parseRepository(s string) (string, string, error) {
 	parts := strings.Split(s, "/")
 	if len(parts) != 2 {
@@ -419,8 +468,70 @@ func parseRepository(s string) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
-func cleanBotUserName(username string) string{
-	if strings.HasSuffix(username, "[bot]"){
+func streamTarballToFileSystem(in io.Reader, outputDirectory string) error {
+	gzr, err := gzip.NewReader(in)
+	if err != nil {
+		return fmt.Errorf("couldn't create gzip reader: %v", err)
+	}
+	tr := tar.NewReader(gzr)
+	for {
+		header, err := tr.Next()
+
+		switch {
+		case err == io.EOF:
+			// we're done
+			return nil
+
+		case err != nil:
+			return fmt.Errorf("couldn't read next tar header: %v", err)
+
+		case header == nil:
+			// shouldn't happen, but let's just skip
+			continue
+		}
+
+		if header.Typeflag == tar.TypeDir && len(strings.Split(header.Name, string(os.PathSeparator))) == 1 {
+			// top level directory, skip
+			continue
+		}
+
+		// GitHub tarballs put the repository in a single top-level directory inside the tarball, with the name being
+		// <repository>-<latest-tag>. We want to stream the repository directly to the output folder without this top
+		// folder, so we remove the first path component and replace it with the output directory.
+		targetPath := filepath.Join(
+			outputDirectory,
+			filepath.Join(strings.Split(header.Name, string(os.PathSeparator))[1:]...),
+		)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			// create a directory
+			if _, err := os.Stat(targetPath); err != nil {
+				if err := os.MkdirAll(targetPath, 0755); err != nil {
+					return fmt.Errorf("failed to create directory: %v", err)
+				}
+			}
+
+		case tar.TypeReg:
+			// create a regular file
+			f, err := os.OpenFile(targetPath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return fmt.Errorf("failed to open file for writing: %v", err)
+			}
+
+			if _, err := io.Copy(f, tr); err != nil {
+				return fmt.Errorf("failed to stream tar to file: %v", err)
+			}
+
+			if err := f.Close(); err != nil {
+				return fmt.Errorf("failed to close file: %v", err)
+			}
+		}
+	}
+}
+
+func cleanBotUserName(username string) string {
+	if strings.HasSuffix(username, "[bot]") {
 		return strings.TrimSuffix(username, "[bot]")
 	}
 	return username

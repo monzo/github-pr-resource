@@ -19,24 +19,36 @@ func Get(request GetRequest, github Github, git Git, outputDir string) (*GetResp
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve pull request: %s", err)
 	}
+	var baseSHA string
 
-	// Initialize and pull the base for the PR
-	if err := git.Init(pull.BaseRefName); err != nil {
-		return nil, err
-	}
-	if err := git.Pull(pull.Repository.URL, pull.BaseRefName, request.Params.GitDepth, request.Params.Submodules, request.Params.FetchTags); err != nil {
-		return nil, err
-	}
+	if request.Params.DownloadTarballViaAPI {
+		if err := github.FetchViaTarball(request.Version.Commit); err != nil {
+			return nil, err
+		}
+		baseSHA, err = github.GetLastSHA(pull.BaseRefName)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Initialize and pull the base for the PR
+		if err := git.Init(pull.BaseRefName); err != nil {
+			return nil, err
+		}
+		if err := git.Pull(pull.Repository.URL, pull.BaseRefName, request.Params.GitDepth, request.Params.Submodules, request.Params.FetchTags); err != nil {
+			return nil, err
+		}
 
-	// Get the last commit SHA in base for the metadata
-	baseSHA, err := git.RevParse(pull.BaseRefName)
-	if err != nil {
-		return nil, err
-	}
+		// Get the last commit SHA in base for the metadata
+		baseSHA, err = git.RevParse(pull.BaseRefName)
+		if err != nil {
+			return nil, err
+		}
 
-	// Fetch the PR and merge the specified commit into the base
-	if err := git.Fetch(pull.Repository.URL, pull.Number, request.Params.GitDepth, request.Params.Submodules); err != nil {
-		return nil, err
+		// Fetch the PR and merge the specified commit into the base
+		if err := git.Fetch(pull.Repository.URL, pull.Number, request.Params.GitDepth, request.Params.Submodules); err != nil {
+			return nil, err
+		}
+
 	}
 
 	// Create the metadata
@@ -130,12 +142,13 @@ func Get(request GetRequest, github Github, git Git, outputDir string) (*GetResp
 
 // GetParameters ...
 type GetParameters struct {
-	SkipDownload     bool   `json:"skip_download"`
-	IntegrationTool  string `json:"integration_tool"`
-	GitDepth         int    `json:"git_depth"`
-	Submodules       bool   `json:"submodules"`
-	ListChangedFiles bool   `json:"list_changed_files"`
-	FetchTags        bool   `json:"fetch_tags"`
+	SkipDownload          bool   `json:"skip_download"`
+	IntegrationTool       string `json:"integration_tool"`
+	GitDepth              int    `json:"git_depth"`
+	Submodules            bool   `json:"submodules"`
+	ListChangedFiles      bool   `json:"list_changed_files"`
+	FetchTags             bool   `json:"fetch_tags"`
+	DownloadTarballViaAPI bool   `json:"download_tarball_via_api"`
 }
 
 // GetRequest ...

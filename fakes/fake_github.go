@@ -20,6 +20,17 @@ type FakeGithub struct {
 	deletePreviousCommentsReturnsOnCall map[int]struct {
 		result1 error
 	}
+	FetchViaTarballStub        func(string) error
+	fetchViaTarballMutex       sync.RWMutex
+	fetchViaTarballArgsForCall []struct {
+		arg1 string
+	}
+	fetchViaTarballReturns struct {
+		result1 error
+	}
+	fetchViaTarballReturnsOnCall map[int]struct {
+		result1 error
+	}
 	GetChangedFilesStub        func(string, string) ([]resource.ChangedFileObject, error)
 	getChangedFilesMutex       sync.RWMutex
 	getChangedFilesArgsForCall []struct {
@@ -32,6 +43,19 @@ type FakeGithub struct {
 	}
 	getChangedFilesReturnsOnCall map[int]struct {
 		result1 []resource.ChangedFileObject
+		result2 error
+	}
+	GetLastSHAStub        func(string) (string, error)
+	getLastSHAMutex       sync.RWMutex
+	getLastSHAArgsForCall []struct {
+		arg1 string
+	}
+	getLastSHAReturns struct {
+		result1 string
+		result2 error
+	}
+	getLastSHAReturnsOnCall map[int]struct {
+		result1 string
 		result2 error
 	}
 	GetPullRequestStub        func(string, string) (*resource.PullRequest, error)
@@ -167,6 +191,66 @@ func (fake *FakeGithub) DeletePreviousCommentsReturnsOnCall(i int, result1 error
 	}{result1}
 }
 
+func (fake *FakeGithub) FetchViaTarball(arg1 string) error {
+	fake.fetchViaTarballMutex.Lock()
+	ret, specificReturn := fake.fetchViaTarballReturnsOnCall[len(fake.fetchViaTarballArgsForCall)]
+	fake.fetchViaTarballArgsForCall = append(fake.fetchViaTarballArgsForCall, struct {
+		arg1 string
+	}{arg1})
+	fake.recordInvocation("FetchViaTarball", []interface{}{arg1})
+	fake.fetchViaTarballMutex.Unlock()
+	if fake.FetchViaTarballStub != nil {
+		return fake.FetchViaTarballStub(arg1)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.fetchViaTarballReturns
+	return fakeReturns.result1
+}
+
+func (fake *FakeGithub) FetchViaTarballCallCount() int {
+	fake.fetchViaTarballMutex.RLock()
+	defer fake.fetchViaTarballMutex.RUnlock()
+	return len(fake.fetchViaTarballArgsForCall)
+}
+
+func (fake *FakeGithub) FetchViaTarballCalls(stub func(string) error) {
+	fake.fetchViaTarballMutex.Lock()
+	defer fake.fetchViaTarballMutex.Unlock()
+	fake.FetchViaTarballStub = stub
+}
+
+func (fake *FakeGithub) FetchViaTarballArgsForCall(i int) string {
+	fake.fetchViaTarballMutex.RLock()
+	defer fake.fetchViaTarballMutex.RUnlock()
+	argsForCall := fake.fetchViaTarballArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeGithub) FetchViaTarballReturns(result1 error) {
+	fake.fetchViaTarballMutex.Lock()
+	defer fake.fetchViaTarballMutex.Unlock()
+	fake.FetchViaTarballStub = nil
+	fake.fetchViaTarballReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeGithub) FetchViaTarballReturnsOnCall(i int, result1 error) {
+	fake.fetchViaTarballMutex.Lock()
+	defer fake.fetchViaTarballMutex.Unlock()
+	fake.FetchViaTarballStub = nil
+	if fake.fetchViaTarballReturnsOnCall == nil {
+		fake.fetchViaTarballReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.fetchViaTarballReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeGithub) GetChangedFiles(arg1 string, arg2 string) ([]resource.ChangedFileObject, error) {
 	fake.getChangedFilesMutex.Lock()
 	ret, specificReturn := fake.getChangedFilesReturnsOnCall[len(fake.getChangedFilesArgsForCall)]
@@ -227,6 +311,69 @@ func (fake *FakeGithub) GetChangedFilesReturnsOnCall(i int, result1 []resource.C
 	}
 	fake.getChangedFilesReturnsOnCall[i] = struct {
 		result1 []resource.ChangedFileObject
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeGithub) GetLastSHA(arg1 string) (string, error) {
+	fake.getLastSHAMutex.Lock()
+	ret, specificReturn := fake.getLastSHAReturnsOnCall[len(fake.getLastSHAArgsForCall)]
+	fake.getLastSHAArgsForCall = append(fake.getLastSHAArgsForCall, struct {
+		arg1 string
+	}{arg1})
+	fake.recordInvocation("GetLastSHA", []interface{}{arg1})
+	fake.getLastSHAMutex.Unlock()
+	if fake.GetLastSHAStub != nil {
+		return fake.GetLastSHAStub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	fakeReturns := fake.getLastSHAReturns
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeGithub) GetLastSHACallCount() int {
+	fake.getLastSHAMutex.RLock()
+	defer fake.getLastSHAMutex.RUnlock()
+	return len(fake.getLastSHAArgsForCall)
+}
+
+func (fake *FakeGithub) GetLastSHACalls(stub func(string) (string, error)) {
+	fake.getLastSHAMutex.Lock()
+	defer fake.getLastSHAMutex.Unlock()
+	fake.GetLastSHAStub = stub
+}
+
+func (fake *FakeGithub) GetLastSHAArgsForCall(i int) string {
+	fake.getLastSHAMutex.RLock()
+	defer fake.getLastSHAMutex.RUnlock()
+	argsForCall := fake.getLastSHAArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeGithub) GetLastSHAReturns(result1 string, result2 error) {
+	fake.getLastSHAMutex.Lock()
+	defer fake.getLastSHAMutex.Unlock()
+	fake.GetLastSHAStub = nil
+	fake.getLastSHAReturns = struct {
+		result1 string
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeGithub) GetLastSHAReturnsOnCall(i int, result1 string, result2 error) {
+	fake.getLastSHAMutex.Lock()
+	defer fake.getLastSHAMutex.Unlock()
+	fake.GetLastSHAStub = nil
+	if fake.getLastSHAReturnsOnCall == nil {
+		fake.getLastSHAReturnsOnCall = make(map[int]struct {
+			result1 string
+			result2 error
+		})
+	}
+	fake.getLastSHAReturnsOnCall[i] = struct {
+		result1 string
 		result2 error
 	}{result1, result2}
 }
@@ -558,8 +705,12 @@ func (fake *FakeGithub) Invocations() map[string][][]interface{} {
 	defer fake.invocationsMutex.RUnlock()
 	fake.deletePreviousCommentsMutex.RLock()
 	defer fake.deletePreviousCommentsMutex.RUnlock()
+	fake.fetchViaTarballMutex.RLock()
+	defer fake.fetchViaTarballMutex.RUnlock()
 	fake.getChangedFilesMutex.RLock()
 	defer fake.getChangedFilesMutex.RUnlock()
+	fake.getLastSHAMutex.RLock()
+	defer fake.getLastSHAMutex.RUnlock()
 	fake.getPullRequestMutex.RLock()
 	defer fake.getPullRequestMutex.RUnlock()
 	fake.listModifiedFilesMutex.RLock()
