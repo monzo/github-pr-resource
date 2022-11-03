@@ -5,11 +5,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/google/go-github/v28/github"
 	"github.com/shurcooL/githubv4"
@@ -41,7 +43,7 @@ func (config GithubConfig) RepositoryURL() string {
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o fakes/fake_github.go . Github
 type Github interface {
 	GetPullRequest(int, string) (*PullRequest, error)
-	ListPullRequests([]githubv4.PullRequestState, string) ([]*PullRequest, error)
+	ListPullRequests([]githubv4.PullRequestState, string, *time.Time) ([]*PullRequest, error)
 	ListModifiedFiles(int) ([]string, error)
 	PostComment(int, string) error
 	UpdateCommitStatus(string, string, string, string, string, string) error
@@ -116,7 +118,7 @@ func NewGithubClient(common CommonConfig, config GithubConfig) (*GithubClient, e
 }
 
 // ListPullRequests gets the last commit on all pull requests with the matching state.
-func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, prHeadRefName string) ([]*PullRequest, error) {
+func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, prHeadRefName string, prUpdatedAfterTime *time.Time) ([]*PullRequest, error) {
 	var query struct {
 		Repository struct {
 			PullRequests struct {
@@ -148,7 +150,7 @@ func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, pr
 					EndCursor   githubv4.String
 					HasNextPage bool
 				}
-			} `graphql:"pullRequests(first:$prFirst,states:$prStates,after:$prCursor,headRefName:$prHeadRefName)"`
+			} `graphql:"pullRequests(first:$prFirst,states:$prStates,after:$prCursor,headRefName:$prHeadRefName,orderBy:$prOrderBy)"`
 		} `graphql:"repository(owner:$repositoryOwner,name:$repositoryName)"`
 	}
 
@@ -168,8 +170,24 @@ func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, pr
 	if len(prHeadRefName) > 0 {
 		vars["prHeadRefName"] = githubv4.String(prHeadRefName)
 	}
+	if prUpdatedAfterTime != nil {
+		// We're interested in the most recent PRs, doing this to avoid
+		// many calls to Github API
+		vars["prOrderBy"] = githubv4.IssueOrder{
+			Field:     githubv4.IssueOrderFieldUpdatedAt,
+			Direction: githubv4.OrderDirectionDesc,
+		}
+	} else {
+		// This is the default sorting
+		vars["prOrderBy"] = githubv4.IssueOrder{
+			Field:     githubv4.IssueOrderFieldCreatedAt,
+			Direction: githubv4.OrderDirectionAsc,
+		}
+	}
 
 	var response []*PullRequest
+	log.Printf("Listing pull requests...")
+	foundAllPRs := false
 	for {
 		if err := m.V4.Query(context.TODO(), &query, vars); err != nil {
 			return nil, err
@@ -185,7 +203,12 @@ func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, pr
 			for _, l := range p.Node.Labels.Edges {
 				labels = append(labels, l.Node.LabelObject)
 			}
-
+			if prUpdatedAfterTime != nil {
+				if p.Node.PullRequestObject.UpdatedAt.Time.Before(*prUpdatedAfterTime) {
+					foundAllPRs = true
+					break
+				}
+			}
 			for _, c := range p.Node.Commits.Edges {
 				response = append(response, &PullRequest{
 					PullRequestObject:   p.Node.PullRequestObject,
@@ -195,11 +218,14 @@ func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, pr
 				})
 			}
 		}
-		if !query.Repository.PullRequests.PageInfo.HasNextPage {
+		if !query.Repository.PullRequests.PageInfo.HasNextPage || foundAllPRs {
 			break
+		} else {
+			log.Printf("Found %v pull requests so far", len(response))
 		}
 		vars["prCursor"] = query.Repository.PullRequests.PageInfo.EndCursor
 	}
+	log.Printf("Found %v pull requests", len(response))
 	return response, nil
 }
 
@@ -375,8 +401,8 @@ func parseRepository(s string) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
-func cleanBotUserName(username string) string{
-	if strings.HasSuffix(username, "[bot]"){
+func cleanBotUserName(username string) string {
+	if strings.HasSuffix(username, "[bot]") {
 		return strings.TrimSuffix(username, "[bot]")
 	}
 	return username

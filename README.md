@@ -80,6 +80,7 @@ repository.
 | `base_branch`               | No       | `master`                         | Name of a branch. The pipeline will only trigger on pull requests against the specified branch.                                                                                                                                                                                             |
 | `labels`                    | No       | `["bug", "enhancement"]`         | The labels on the PR. The pipeline will only trigger on pull requests having at least one of the specified labels.                                                                                                                                                                          |
 | `states`                    | No       | `["OPEN", "MERGED"]`             | The PR states to select (`OPEN`, `MERGED` or `CLOSED`). The pipeline will only trigger on pull requests matching one of the specified states. Default is ["OPEN"].                                                                                                                          |
+| `updated_in_the_last`       | No       | `1h`                             | Check the PRs that were updated in the last amount of time set here, for example `1h`, `24h`, `1d`, `30m`.                                                                                                                         |
 
 Notes:
 - If any of `hosting_endpoint`, `v3_endpoint`, or `v4_endpoint` are set, all of them must be set.
