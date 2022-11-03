@@ -27,6 +27,7 @@ type Source struct {
 	RequiredReviewApprovals int                         `json:"required_review_approvals"`
 	Labels                  []string                    `json:"labels"`
 	States                  []githubv4.PullRequestState `json:"states"`
+	UpdatedInTheLast        string                      `json:"updated_in_the_last"`
 }
 
 // Validate the source configuration.
@@ -114,6 +115,8 @@ type PullRequestObject struct {
 	State             githubv4.PullRequestState
 	ClosedAt          githubv4.DateTime
 	MergedAt          githubv4.DateTime
+	CreatedAt         githubv4.DateTime
+	UpdatedAt         githubv4.DateTime
 }
 
 // UpdatedDate returns the last time a PR was updated, either by commit
