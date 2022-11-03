@@ -37,6 +37,7 @@ Make sure to check out [#migrating](#migrating) to learn more.
 | `labels`                    | No       | `["bug", "enhancement"]`         | The labels on the PR. The pipeline will only trigger on pull requests having at least one of the specified labels.                                                                                                                                                                         |
 | `disable_git_lfs`           | No       | `true`                           | Disable Git LFS, skipping an attempt to convert pointers of files tracked into their corresponding objects when checked out into a working copy.                                                                                                                                           |
 | `states`                    | No       | `["OPEN", "MERGED"]`             | The PR states to select (`OPEN`, `MERGED` or `CLOSED`). The pipeline will only trigger on pull requests matching one of the specified states. Default is ["OPEN"].                                                                                                                         |
+| `updated_in_the_last`       | No       | `1h`                             | Check the PRs that were updated in the last amount of time set here, for example `1h`, `24h`, `1d`, `30m`.                                                                                                                         |
 
 Notes:
  - If `v3_endpoint` is set, `v4_endpoint` must also be set (and the other way around).
