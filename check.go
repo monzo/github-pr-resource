@@ -2,10 +2,12 @@ package resource
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/shurcooL/githubv4"
 )
@@ -19,14 +21,28 @@ func Check(request CheckRequest, manager Github) (CheckResponse, error) {
 	if len(request.Source.States) > 0 {
 		filterStates = request.Source.States
 	}
+	log.Printf("Filtering for states: %v", filterStates)
 
-	pulls, err := manager.ListPullRequests(filterStates, request.Source.Branch)
+	var prUpdatedAfterTime *time.Time
+	if request.Source.UpdatedInTheLast != "" {
+		duration, err := time.ParseDuration(request.Source.UpdatedInTheLast)
+		if err == nil {
+			updatedInTheLastTime := time.Now().Add(-duration)
+			prUpdatedAfterTime = &updatedInTheLastTime
+			log.Printf("Filtering PRs updated since %v", prUpdatedAfterTime)
+		} else {
+			log.Printf("Error parsing updated_in_the_last field: %v", err)
+		}
+	}
+
+	pulls, err := manager.ListPullRequests(filterStates, request.Source.Branch, prUpdatedAfterTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last commits: %s", err)
 	}
 
 	disableSkipCI := request.Source.DisableCISkip
 
+	log.Printf("Processing pull requests")
 Loop:
 	for _, p := range pulls {
 		// [ci skip]/[skip ci] in Pull request title
