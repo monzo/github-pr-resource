@@ -151,6 +151,7 @@ Loop:
 	if len(response) != 0 && request.Version.PR == "" {
 		response = CheckResponse{response[len(response)-1]}
 	}
+	log.Printf("Finished processing pull requests")
 	return response, nil
 }
 
