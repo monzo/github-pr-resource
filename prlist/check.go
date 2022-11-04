@@ -149,6 +149,7 @@ Loop:
 		return CheckResponse{*request.Version}, nil
 	}
 
+	log.Printf("Finished processing pull requests")
 	return CheckResponse{*request.Version, version}, nil
 }
 
