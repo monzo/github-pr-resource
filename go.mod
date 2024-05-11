@@ -1,5 +1,9 @@
 module github.com/telia-oss/github-pr-resource
 
+go 1.21.0
+
+toolchain go1.21.10
+
 require (
 	github.com/google/go-github/v61 v61.0.0
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.4.1
@@ -20,7 +24,3 @@ require (
 	golang.org/x/tools v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-go 1.21.0
-
-toolchain go1.21.10
