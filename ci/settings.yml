@@ -309,6 +309,20 @@ resources:
     source:
       repository:        golang
       semver_constraint: "< 1970" # Avoid YYYYMMDD tags like '20231219'
+      # NOTICE:
+      #
+      # TL;DR: No Alpine for building Golang code with CGO_ENABLED=1
+      #
+      # We can't use 'variant: alpine' here, because the 'go test -race' we
+      # use in Makefile requires CGO_ENABLED=1, which requires a C compiler,
+      # and a libc that implements the non-POSIX pread64() and pwrite64()
+      # functions. Only GNU libc ships with these. The musl libc from Alpine
+      # doesn't.
+      #
+      # The only solution is to revert back using a Debian image with proper
+      # GCC and GNU libc.
+      #
+      # See also: <https://stackoverflow.com/a/78096319/12178803>
 
   - name: alpine-latest
     type: registry-image
