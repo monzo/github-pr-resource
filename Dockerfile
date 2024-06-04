@@ -1,9 +1,4 @@
-ARG golang
-ARG alpine
-
-
-
-FROM ${golang} AS builder
+FROM golang:1.22.3@sha256:f43c6f049f04cbbaeb28f0aad3eea15274a7d0a7899a617d0037aec48d7ab010 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get -y -qq update \
@@ -17,7 +12,7 @@ RUN go version \
 
 
 
-FROM ${alpine} AS resource
+FROM alpine:3.20.0@sha256:77726ef6b57ddf65bb551896826ec38bc3e53f75cdde31354fbffb4f25238ebd AS resource
 RUN apk add --update --no-cache \
     git \
     git-lfs \
