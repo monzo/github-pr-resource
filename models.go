@@ -29,6 +29,7 @@ type Source struct {
 	States                  []githubv4.PullRequestState `json:"states"`
 	TrustedTeams            []string                    `json:"trusted_teams"`
 	TrustedUsers            []string                    `json:"trusted_users"`
+	Branch                  string                      `json:"branch"`
 }
 
 // Validate the source configuration.

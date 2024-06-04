@@ -21,7 +21,7 @@ import (
 //
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o fakes/fake_github.go . Github
 type Github interface {
-	ListPullRequests([]githubv4.PullRequestState) ([]*PullRequest, error)
+	ListPullRequests([]githubv4.PullRequestState, string) ([]*PullRequest, error)
 	ListModifiedFiles(int) ([]string, error)
 	ListTeamMembers(string) ([]string, error)
 	PostComment(string, string) error
@@ -101,7 +101,7 @@ func NewGithubClient(s *Source) (*GithubClient, error) {
 }
 
 // ListPullRequests gets the last commit on all pull requests with the matching state.
-func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState) ([]*PullRequest, error) {
+func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, prHeadRefName string) ([]*PullRequest, error) {
 	var query struct {
 		Repository struct {
 			PullRequests struct {
@@ -133,7 +133,7 @@ func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState) ([
 					EndCursor   githubv4.String
 					HasNextPage bool
 				}
-			} `graphql:"pullRequests(first:$prFirst,states:$prStates,after:$prCursor)"`
+			} `graphql:"pullRequests(first:$prFirst,states:$prStates,after:$prCursor,headRefName:$prHeadRefName)"`
 		} `graphql:"repository(owner:$repositoryOwner,name:$repositoryName)"`
 	}
 
@@ -143,10 +143,15 @@ func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState) ([
 		"prFirst":         githubv4.Int(100),
 		"prReviewsLast":   githubv4.Int(100),
 		"prStates":        prStates,
+		"prHeadRefName":   (*githubv4.String)(nil),
 		"prCursor":        (*githubv4.String)(nil),
 		"commitsLast":     githubv4.Int(1),
 		"prReviewStates":  []githubv4.PullRequestReviewState{githubv4.PullRequestReviewStateApproved},
 		"labelsFirst":     githubv4.Int(100),
+	}
+
+	if len(prHeadRefName) > 0 {
+		vars["prHeadRefName"] = githubv4.String(prHeadRefName)
 	}
 
 	var response []*PullRequest

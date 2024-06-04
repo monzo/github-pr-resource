@@ -1,12 +1,11 @@
 package resource_test
 
 import (
-	"testing"
-
 	"github.com/shurcooL/githubv4"
 	"github.com/stretchr/testify/assert"
 	resource "github.com/telia-oss/github-pr-resource"
 	"github.com/telia-oss/github-pr-resource/fakes"
+	"testing"
 )
 
 var (
@@ -292,6 +291,19 @@ func TestCheck(t *testing.T) {
 			pullRequests:    standardTestPRs[9:11],
 			files:           [][]string{},
 			expectedIndexes: nil,
+		},
+
+		{
+			description: "check returns versions from a PR with multiple state filters",
+			source: resource.Source{
+				Repository:  "itsdalmo/test-repository",
+				AccessToken: "oauthtoken",
+				States:      []githubv4.PullRequestState{githubv4.PullRequestStateClosed, githubv4.PullRequestStateMerged},
+			},
+			version:         resource.NewVersion(standardTestPRs[11]),
+			pullRequests:    standardTestPRs,
+			files:           [][]string{},
+			expectedIndexes: []int{9, 10},
 		},
 
 		{
