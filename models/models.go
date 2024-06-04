@@ -41,6 +41,8 @@ type PullRequestObject struct {
 	State             githubv4.PullRequestState
 	ClosedAt          githubv4.DateTime
 	MergedAt          githubv4.DateTime
+	CreatedAt         githubv4.DateTime
+	UpdatedAt         githubv4.DateTime
 }
 
 // UpdatedDate returns the last time a PR was updated, either by commit

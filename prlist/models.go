@@ -25,6 +25,7 @@ type Source struct {
 	Labels                  []string                    `json:"labels"`
 	States                  []githubv4.PullRequestState `json:"states"`
 	Branch                  string                      `json:"branch"`
+	UpdatedInTheLast        string                      `json:"updated_in_the_last"`
 }
 
 // Validate the source configuration.

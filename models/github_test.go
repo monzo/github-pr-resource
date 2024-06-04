@@ -1,4 +1,4 @@
-package resource
+package models
 
 import "testing"
 
