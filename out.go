@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,7 @@ func Put(request PutRequest, manager Github, inputDir string) (*PutResponse, err
 			description = string(content)
 		}
 
+		log.Printf("Setting commit status on PR #%s: %s", version.PR, p.Status)
 		if err := manager.UpdateCommitStatus(version.Commit, p.BaseContext, safeExpandEnv(p.Context), p.Status, safeExpandEnv(p.TargetURL), description); err != nil {
 			return nil, fmt.Errorf("failed to set status: %s", err)
 		}
@@ -56,6 +58,7 @@ func Put(request PutRequest, manager Github, inputDir string) (*PutResponse, err
 
 	// Delete previous comments if specified
 	if request.Params.DeletePreviousComments {
+		log.Printf("Deleting previous comments on PR #%s", version.PR)
 		err = manager.DeletePreviousComments(version.PR)
 		if err != nil {
 			return nil, fmt.Errorf("failed to delete previous comments: %s", err)
@@ -64,6 +67,7 @@ func Put(request PutRequest, manager Github, inputDir string) (*PutResponse, err
 
 	// Set comment if specified
 	if p := request.Params; p.Comment != "" {
+		log.Printf("Posting inline comment to PR #%s (%d bytes)", version.PR, len(p.Comment))
 		err = manager.PostComment(version.PR, safeExpandEnv(p.Comment))
 		if err != nil {
 			return nil, fmt.Errorf("failed to post comment: %s", err)
@@ -78,10 +82,13 @@ func Put(request PutRequest, manager Github, inputDir string) (*PutResponse, err
 		}
 		comment := string(content)
 		if comment != "" {
+			log.Printf("Posting comment to PR #%s (%d bytes)", version.PR, len(comment))
 			err = manager.PostComment(version.PR, safeExpandEnv(comment))
 			if err != nil {
 				return nil, fmt.Errorf("failed to post comment: %s", err)
 			}
+		} else {
+			log.Printf("Skipping comment for PR #%s: comment file %q was empty", version.PR, p.CommentFile)
 		}
 	}
 

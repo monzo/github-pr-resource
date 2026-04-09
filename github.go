@@ -279,7 +279,7 @@ func (m *GithubClient) PostComment(prNumber, comment string) error {
 		return fmt.Errorf("failed to convert pull request number to int: %s", err)
 	}
 
-	_, _, err = m.V3.Issues.CreateComment(
+	created, resp, err := m.V3.Issues.CreateComment(
 		context.TODO(),
 		m.Owner,
 		m.Repository,
@@ -288,7 +288,11 @@ func (m *GithubClient) PostComment(prNumber, comment string) error {
 			Body: github.String(comment),
 		},
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	log.Printf("Posted comment to %s/%s#%d: comment ID %d, API status %s", m.Owner, m.Repository, pr, created.GetID(), resp.Status)
+	return nil
 }
 
 // GetChangedFiles ...
@@ -413,7 +417,7 @@ func (m *GithubClient) UpdateCommitStatus(commitRef, baseContext, statusContext,
 		description = fmt.Sprintf("Concourse CI build %s", status)
 	}
 
-	_, _, err := m.V3.Repositories.CreateStatus(
+	_, resp, err := m.V3.Repositories.CreateStatus(
 		context.TODO(),
 		m.Owner,
 		m.Repository,
@@ -425,7 +429,11 @@ func (m *GithubClient) UpdateCommitStatus(commitRef, baseContext, statusContext,
 			Context:     github.String(path.Join(baseContext, statusContext)),
 		},
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	log.Printf("Set commit status on %s/%s@%.7s: %s (%s/%s), API status %s", m.Owner, m.Repository, commitRef, status, baseContext, statusContext, resp.Status)
+	return nil
 }
 
 func (m *GithubClient) DeletePreviousComments(prNumber string) error {
@@ -466,15 +474,18 @@ func (m *GithubClient) DeletePreviousComments(prNumber string) error {
 		return err
 	}
 
+	deleted := 0
 	for _, e := range getComments.Repository.PullRequest.Comments.Edges {
 		if cleanBotUserName(e.Node.Author.Login) == cleanBotUserName(getComments.Viewer.Login) {
 			_, err := m.V3.Issues.DeleteComment(context.TODO(), m.Owner, m.Repository, e.Node.DatabaseId)
 			if err != nil {
 				return err
 			}
+			deleted++
 		}
 	}
 
+	log.Printf("Deleted %d previous comments on %s/%s#%d", deleted, m.Owner, m.Repository, pr)
 	return nil
 }
 
