@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,10 +79,13 @@ func Put(request PutRequest, manager Github, inputDir string) (*PutResponse, err
 		}
 		comment := string(content)
 		if comment != "" {
+			log.Printf("Posting comment to PR #%s (%d bytes)", version.PR, len(comment))
 			err = manager.PostComment(version.PR, safeExpandEnv(comment))
 			if err != nil {
 				return nil, fmt.Errorf("failed to post comment: %s", err)
 			}
+		} else {
+			log.Printf("Skipping comment for PR #%s: comment file %q was empty", version.PR, p.CommentFile)
 		}
 	}
 

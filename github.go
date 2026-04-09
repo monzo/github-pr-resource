@@ -279,7 +279,7 @@ func (m *GithubClient) PostComment(prNumber, comment string) error {
 		return fmt.Errorf("failed to convert pull request number to int: %s", err)
 	}
 
-	_, _, err = m.V3.Issues.CreateComment(
+	created, resp, err := m.V3.Issues.CreateComment(
 		context.TODO(),
 		m.Owner,
 		m.Repository,
@@ -288,7 +288,11 @@ func (m *GithubClient) PostComment(prNumber, comment string) error {
 			Body: github.String(comment),
 		},
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	log.Printf("Posted comment to %s/%s#%d: comment ID %d, API status %s", m.Owner, m.Repository, pr, created.GetID(), resp.Status)
+	return nil
 }
 
 // GetChangedFiles ...
