@@ -1,5 +1,7 @@
 ## This package is forked from [cloudfoundry-community/github-pr-resource](https://github.com/cloudfoundry-community/github-pr-resource)
 
+Hello world.
+
 ## Github PR resource
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/cloudfoundry-community/github-pr-resource)](https://goreportcard.com/report/github.com/cloudfoundry-community/github-pr-resource)
