@@ -13,6 +13,8 @@ import (
 	"strings"
 )
 
+var askpassPath = "/usr/local/bin/askpass.sh"
+
 // Git interface for testing purposes.
 //
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o fakes/fake_git.go . Git
@@ -57,7 +59,7 @@ func (g *GitClient) command(name string, arg ...string) *exec.Cmd {
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env,
 		"X_OAUTH_BASIC_TOKEN="+g.AccessToken,
-		"GIT_ASKPASS=/usr/local/bin/askpass.sh")
+		"GIT_ASKPASS="+askpassPath)
 	return cmd
 }
 
@@ -92,7 +94,7 @@ func (g *GitClient) Pull(uri, branch string, depth int, submodules bool, fetchTa
 	}
 
 	if err := g.command("git", "remote", "add", "origin", endpoint).Run(); err != nil {
-		return fmt.Errorf("setting 'origin' remote to '%s' failed: %s", endpoint, err)
+		return fmt.Errorf("setting 'origin' remote failed: %s", err)
 	}
 
 	args := []string{"pull", "origin", branch}
@@ -226,12 +228,12 @@ func (g *GitClient) GitCryptUnlock(base64key string) error {
 	return nil
 }
 
-// Endpoint takes an uri and produces an endpoint with the login information baked in.
+// Endpoint takes an uri and produces an endpoint with any login information removed.
 func (g *GitClient) Endpoint(uri string) (string, error) {
 	endpoint, err := url.Parse(uri)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse commit url: %s", err)
+		return "", fmt.Errorf("failed to parse commit url")
 	}
-	endpoint.User = url.UserPassword("x-oauth-basic", g.AccessToken)
+	endpoint.User = nil
 	return endpoint.String(), nil
 }
