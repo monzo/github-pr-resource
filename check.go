@@ -5,6 +5,7 @@ import (
 	"log"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -37,9 +38,23 @@ func Check(request CheckRequest, manager Github) (CheckResponse, error) {
 		}
 	}
 
-	pulls, err := manager.ListPullRequests(filterStates, request.Source.Branch, prUpdatedAfterTime)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get last commits: %s", err)
+	var pulls []*PullRequest
+	if request.Source.Number != 0 {
+		p, err := manager.GetPullRequestByNumber(request.Source.Number)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pull request #%d: %s", request.Source.Number, err)
+		}
+		// Apply the state and updated_in_the_last filters that ListPullRequests applies server side.
+		if p != nil && slices.Contains(filterStates, p.State) &&
+			(prUpdatedAfterTime == nil || !p.UpdatedAt.Time.Before(*prUpdatedAfterTime)) {
+			pulls = append(pulls, p)
+		}
+	} else {
+		var err error
+		pulls, err = manager.ListPullRequests(filterStates, request.Source.Branch, prUpdatedAfterTime)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get last commits: %s", err)
+		}
 	}
 
 	disableSkipCI := request.Source.DisableCISkip
@@ -142,7 +157,9 @@ Loop:
 			}
 		}
 
-		response = append(response, NewVersion(p))
+		version := NewVersion(p)
+		version.ConfigKey = request.Source.ConfigKey
+		response = append(response, version)
 	}
 
 	log.Printf("Finished processing pull requests")

@@ -3,6 +3,7 @@ package resource
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -31,7 +32,11 @@ type Source struct {
 	TrustedUsers            []string                    `json:"trusted_users"`
 	Branch                  string                      `json:"branch"`
 	UpdatedInTheLast        string                      `json:"updated_in_the_last"`
+	Number                  int                         `json:"number"`
+	ConfigKey               string                      `json:"config_key"`
 }
+
+var configKeyPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // Validate the source configuration.
 func (s *Source) Validate() error {
@@ -56,6 +61,12 @@ func (s *Source) Validate() error {
 			return fmt.Errorf("states value \"%s\" must be one of: OPEN, MERGED, CLOSED", state)
 		}
 	}
+	if s.Number != 0 && s.Branch != "" {
+		return errors.New("number and branch are mutually exclusive")
+	}
+	if s.ConfigKey != "" && !configKeyPattern.MatchString(s.ConfigKey) {
+		return errors.New("config_key must be 64 lowercase hex characters")
+	}
 	return nil
 }
 
@@ -79,6 +90,7 @@ type Version struct {
 	Commit        string                    `json:"commit"`
 	CommittedDate time.Time                 `json:"committed,omitempty"`
 	State         githubv4.PullRequestState `json:"state"`
+	ConfigKey     string                    `json:"config_key,omitempty"`
 }
 
 // NewVersion constructs a new Version.

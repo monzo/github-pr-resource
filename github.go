@@ -24,6 +24,7 @@ import (
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o fakes/fake_github.go . Github
 type Github interface {
 	ListPullRequests([]githubv4.PullRequestState, string, *time.Time) ([]*PullRequest, error)
+	GetPullRequestByNumber(int) (*PullRequest, error)
 	ListModifiedFiles(int) ([]string, error)
 	ListTeamMembers(string) ([]string, error)
 	PostComment(string, string) error
@@ -108,28 +109,7 @@ func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, pr
 		Repository struct {
 			PullRequests struct {
 				Edges []struct {
-					Node struct {
-						PullRequestObject
-						Reviews struct {
-							Nodes []struct {
-								AuthorCanPushToRepository bool
-							}
-						} `graphql:"reviews(last: $prReviewsLast,states: $prReviewStates)"`
-						Commits struct {
-							Edges []struct {
-								Node struct {
-									Commit CommitObject
-								}
-							}
-						} `graphql:"commits(last:$commitsLast)"`
-						Labels struct {
-							Edges []struct {
-								Node struct {
-									LabelObject
-								}
-							}
-						} `graphql:"labels(first:$labelsFirst)"`
-					}
+					Node pullRequestNode
 				}
 				PageInfo struct {
 					EndCursor   githubv4.String
@@ -178,31 +158,13 @@ func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, pr
 			return nil, err
 		}
 		for _, p := range query.Repository.PullRequests.Edges {
-			labels := make([]LabelObject, len(p.Node.Labels.Edges))
-			numApprovals := 0
-			for _, review := range p.Node.Reviews.Nodes {
-				if review.AuthorCanPushToRepository {
-					numApprovals++
-				}
-			}
-			for _, l := range p.Node.Labels.Edges {
-				labels = append(labels, l.Node.LabelObject)
-			}
 			if prUpdatedAfterTime != nil {
 				if p.Node.PullRequestObject.UpdatedAt.Time.Before(*prUpdatedAfterTime) {
 					foundAllPRs = true
 					break
 				}
 			}
-
-			for _, c := range p.Node.Commits.Edges {
-				response = append(response, &PullRequest{
-					PullRequestObject:   p.Node.PullRequestObject,
-					Tip:                 c.Node.Commit,
-					ApprovedReviewCount: numApprovals,
-					Labels:              labels,
-				})
-			}
+			response = append(response, p.Node.pullRequests()...)
 		}
 		if !query.Repository.PullRequests.PageInfo.HasNextPage || foundAllPRs {
 			break
@@ -213,6 +175,86 @@ func (m *GithubClient) ListPullRequests(prStates []githubv4.PullRequestState, pr
 	}
 	log.Printf("Found %v pull requests", len(response))
 	return response, nil
+}
+
+// GetPullRequestByNumber gets the last commit on a single pull request, in the
+// same shape as ListPullRequests. It returns nil if the pull request has no commits.
+func (m *GithubClient) GetPullRequestByNumber(number int) (*PullRequest, error) {
+	var query struct {
+		Repository struct {
+			PullRequest pullRequestNode `graphql:"pullRequest(number:$prNumber)"`
+		} `graphql:"repository(owner:$repositoryOwner,name:$repositoryName)"`
+	}
+
+	vars := map[string]interface{}{
+		"repositoryOwner": githubv4.String(m.Owner),
+		"repositoryName":  githubv4.String(m.Repository),
+		"prNumber":        githubv4.Int(number),
+		"prReviewsLast":   githubv4.Int(100),
+		"commitsLast":     githubv4.Int(1),
+		"prReviewStates":  []githubv4.PullRequestReviewState{githubv4.PullRequestReviewStateApproved},
+		"labelsFirst":     githubv4.Int(100),
+	}
+
+	log.Printf("Getting pull request #%d...", number)
+	if err := m.V4.Query(context.TODO(), &query, vars); err != nil {
+		return nil, err
+	}
+	pulls := query.Repository.PullRequest.pullRequests()
+	if len(pulls) == 0 {
+		return nil, nil
+	}
+	return pulls[0], nil
+}
+
+// pullRequestNode is the GraphQL pull request node used by ListPullRequests
+// and GetPullRequestByNumber.
+type pullRequestNode struct {
+	PullRequestObject
+	Reviews struct {
+		Nodes []struct {
+			AuthorCanPushToRepository bool
+		}
+	} `graphql:"reviews(last: $prReviewsLast,states: $prReviewStates)"`
+	Commits struct {
+		Edges []struct {
+			Node struct {
+				Commit CommitObject
+			}
+		}
+	} `graphql:"commits(last:$commitsLast)"`
+	Labels struct {
+		Edges []struct {
+			Node struct {
+				LabelObject
+			}
+		}
+	} `graphql:"labels(first:$labelsFirst)"`
+}
+
+// pullRequests returns one PullRequest per fetched commit.
+func (n pullRequestNode) pullRequests() []*PullRequest {
+	labels := make([]LabelObject, len(n.Labels.Edges))
+	numApprovals := 0
+	for _, review := range n.Reviews.Nodes {
+		if review.AuthorCanPushToRepository {
+			numApprovals++
+		}
+	}
+	for _, l := range n.Labels.Edges {
+		labels = append(labels, l.Node.LabelObject)
+	}
+
+	var pulls []*PullRequest
+	for _, c := range n.Commits.Edges {
+		pulls = append(pulls, &PullRequest{
+			PullRequestObject:   n.PullRequestObject,
+			Tip:                 c.Node.Commit,
+			ApprovedReviewCount: numApprovals,
+			Labels:              labels,
+		})
+	}
+	return pulls
 }
 
 func (m *GithubClient) ListTeamMembers(team string) ([]string, error) {

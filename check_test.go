@@ -1,11 +1,16 @@
 package resource_test
 
 import (
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/shurcooL/githubv4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	resource "github.com/telia-oss/github-pr-resource"
 	"github.com/telia-oss/github-pr-resource/fakes"
-	"testing"
 )
 
 var (
@@ -648,4 +653,85 @@ func TestCheckTeamMemberCache(t *testing.T) {
 		assert.Equal(t, nil, err)
 		assert.Equal(t, 1, github.ListTeamMembersCallCount())
 	})
+}
+
+func TestCheckNumber(t *testing.T) {
+	tests := []struct {
+		description     string
+		source          resource.Source
+		pullRequest     *resource.PullRequest
+		expectedVersion bool
+	}{
+		{
+			description:     "check returns only the configured pull request",
+			source:          resource.Source{Number: 3},
+			pullRequest:     standardTestPRs[3],
+			expectedVersion: true,
+		},
+		{
+			description: "number respects the state filter",
+			source:      resource.Source{Number: 9},
+			pullRequest: standardTestPRs[9],
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			github := new(fakes.FakeGithub)
+			github.GetPullRequestByNumberReturns(tc.pullRequest, nil)
+
+			tc.source.Repository = "itsdalmo/test-repository"
+			tc.source.AccessToken = "oauthtoken"
+			output, err := resource.Check(resource.CheckRequest{Source: tc.source}, github)
+
+			var expected resource.CheckResponse
+			if tc.expectedVersion {
+				expected = resource.CheckResponse{resource.NewVersion(tc.pullRequest)}
+			}
+			if assert.NoError(t, err) {
+				assert.Equal(t, expected, output)
+			}
+			assert.Equal(t, 0, github.ListPullRequestsCallCount())
+			if assert.Equal(t, 1, github.GetPullRequestByNumberCallCount()) {
+				assert.Equal(t, tc.source.Number, github.GetPullRequestByNumberArgsForCall(0))
+			}
+		})
+	}
+}
+
+func TestCheckConfigKey(t *testing.T) {
+	pr := createTestPR(1, "master", "anonymous", false, false, 0, nil, false, githubv4.PullRequestStateOpen)
+	pr.Tip.CommittedDate = githubv4.DateTime{Time: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
+	key := strings.Repeat("0a", 32)
+
+	tests := []struct {
+		description string
+		configKey   string
+		expected    string
+	}{
+		{
+			description: "versions are unchanged when config_key is unset",
+			expected:    `[{"pr":"1","commit":"oid1","committed":"2026-01-02T03:04:05Z","state":"OPEN"}]`,
+		},
+		{
+			description: "versions carry config_key when set",
+			configKey:   key,
+			expected:    `[{"pr":"1","commit":"oid1","committed":"2026-01-02T03:04:05Z","state":"OPEN","config_key":"` + key + `"}]`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			github := new(fakes.FakeGithub)
+			github.ListPullRequestsReturns([]*resource.PullRequest{pr}, nil)
+
+			source := resource.Source{Repository: "itsdalmo/test-repository", AccessToken: "oauthtoken", ConfigKey: tc.configKey}
+			output, err := resource.Check(resource.CheckRequest{Source: source}, github)
+			require.NoError(t, err)
+
+			b, err := json.Marshal(output)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, string(b))
+		})
+	}
 }
