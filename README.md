@@ -59,6 +59,8 @@ automated tests.
 | `disable_git_lfs`           | No       | `true`                           | Disable Git LFS, skipping an attempt to convert pointers of files tracked into their corresponding objects when checked out into a working copy.                                                                   |
 | `states`                    | No       | `["OPEN", "MERGED"]`             | The PR states to select (`OPEN`, `MERGED` or `CLOSED`). The pipeline will only trigger on pull requests matching one of the specified states. Default is ["OPEN"].                                                 |
 | `updated_in_the_last`       | No       | `1h`                             | Check the PRs that were updated in the last amount of time set here, for example `1h`, `24h`, `1d`, `30m`.                                                                                                                         |
+| `number`                    | No       | `42`                             | Only check the pull request with this number. Must be a JSON number, not a string. Cannot be combined with `branch`. Other filters, such as `paths` and `states`, still apply.                                     |
+| `config_key`                | No       | `9f86d081884c7d65...` (64 chars) | 64 lowercase hex characters, copied into every version. Changes the version when the pipeline's rendered config changes; no other effect.                                                                          |
 
 Notes:
  - If `v3_endpoint` is set, `v4_endpoint` must also be set (and the other way around).
@@ -77,6 +79,7 @@ A version is represented as follows:
 - `commit`: The commit SHA.
 - `committed`: Timestamp of when the commit was committed. Used to filter subsequent checks.
 - `approved_review_count`: The number of reviews approving of the PR.
+- `config_key`: The source's `config_key`, if set.
 
 If several commits are pushed to a given PR at the same time, the last commit will be the new version.
 
