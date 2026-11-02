@@ -2,6 +2,7 @@ package resource
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,6 +13,9 @@ import (
 
 // Put (business logic)
 func Put(request PutRequest, manager Github, inputDir string) (*PutResponse, error) {
+	if request.Source.List {
+		return nil, errors.New("put isn't supported in list mode")
+	}
 	if err := request.Params.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid parameters: %s", err)
 	}

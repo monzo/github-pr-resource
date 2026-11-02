@@ -14,6 +14,9 @@ func Get(request GetRequest, github Github, git Git, outputDir string) (*GetResp
 	if request.Params.SkipDownload {
 		return &GetResponse{Version: request.Version}, nil
 	}
+	if request.Source.List {
+		return getList(request, github, outputDir)
+	}
 
 	pull, err := github.GetPullRequest(request.Version.PR, request.Version.Commit)
 	if err != nil {
