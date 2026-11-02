@@ -61,6 +61,7 @@ automated tests.
 | `updated_in_the_last`       | No       | `1h`                             | Check the PRs that were updated in the last amount of time set here, for example `1h`, `24h`, `1d`, `30m`.                                                                                                                         |
 | `number`                    | No       | `42`                             | Only check the pull request with this number. Must be a JSON number, not a string. Cannot be combined with `branch`. Other filters, such as `paths` and `states`, still apply.                                     |
 | `config_key`                | No       | `9f86d081884c7d65...` (64 chars) | 64 lowercase hex characters, copied into every version. Changes the version when the pipeline's rendered config changes; no other effect.                                                                          |
+| `list`                      | No       | `true`                           | List mode: one version per change to the set of pull requests that pass the filters, and `get` writes them to `prs.json`. Cannot be combined with `number` or `config_key`. See below.                             |
 
 Notes:
  - If `v3_endpoint` is set, `v4_endpoint` must also be set (and the other way around).
@@ -82,6 +83,11 @@ A version is represented as follows:
 - `config_key`: The source's `config_key`, if set.
 
 If several commits are pushed to a given PR at the same time, the last commit will be the new version.
+
+**List mode** (`list: true`): `check` emits one version, `{"list": "<sha256>"}`, a digest of the pull requests that
+pass the source's filters. It changes when a pull request is opened, closed or pushed to, or stops or starts passing
+the filters. `get` writes the current list to `prs.json`, as `[{"number", "headRefOid", "changedFiles"}]` sorted by
+number. Use it to trigger a pipeline that acts on every open pull request at once. `put` is not supported.
 
 **Note on webhooks:**
 This resource does not implement any caching, so it should work well with webhooks (should be subscribed to `push` and `pull_request` events).

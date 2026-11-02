@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -34,6 +35,7 @@ type Source struct {
 	UpdatedInTheLast        string                      `json:"updated_in_the_last"`
 	Number                  int                         `json:"number"`
 	ConfigKey               string                      `json:"config_key"`
+	List                    bool                        `json:"list"`
 }
 
 var configKeyPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -67,6 +69,9 @@ func (s *Source) Validate() error {
 	if s.ConfigKey != "" && !configKeyPattern.MatchString(s.ConfigKey) {
 		return errors.New("config_key must be 64 lowercase hex characters")
 	}
+	if s.List && (s.Number != 0 || s.ConfigKey != "") {
+		return errors.New("list can't be set with number or config_key")
+	}
 	return nil
 }
 
@@ -91,6 +96,19 @@ type Version struct {
 	CommittedDate time.Time                 `json:"committed,omitempty"`
 	State         githubv4.PullRequestState `json:"state"`
 	ConfigKey     string                    `json:"config_key,omitempty"`
+	// List is set instead of the other fields in list mode: a digest of the pull request list
+	List string `json:"list,omitempty"`
+}
+
+// MarshalJSON writes only list for a list mode version, and the other fields otherwise.
+func (v Version) MarshalJSON() ([]byte, error) {
+	if v.List != "" {
+		return json.Marshal(struct {
+			List string `json:"list"`
+		}{v.List})
+	}
+	type version Version
+	return json.Marshal(version(v))
 }
 
 // NewVersion constructs a new Version.
@@ -125,6 +143,7 @@ type PullRequestObject struct {
 		URL string
 	}
 	IsCrossRepository bool
+	ChangedFiles      int
 	IsDraft           bool
 	State             githubv4.PullRequestState
 	ClosedAt          githubv4.DateTime

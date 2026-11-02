@@ -17,146 +17,21 @@ var trustedTeamMembers map[string]bool = map[string]bool{}
 
 // Check (business logic)
 func Check(request CheckRequest, manager Github) (CheckResponse, error) {
+	pulls, err := filteredPullRequests(request.Source, manager)
+	if err != nil {
+		return nil, err
+	}
+
+	if request.Source.List {
+		version, _, err := listVersion(pulls)
+		if err != nil {
+			return nil, err
+		}
+		return CheckResponse{version}, nil
+	}
+
 	var response CheckResponse
-
-	// Filter out pull request if it does not have a filtered state
-	filterStates := []githubv4.PullRequestState{githubv4.PullRequestStateOpen}
-	if len(request.Source.States) > 0 {
-		filterStates = request.Source.States
-	}
-	log.Printf("Filtering for states: %v", filterStates)
-
-	var prUpdatedAfterTime *time.Time
-	if request.Source.UpdatedInTheLast != "" {
-		duration, err := time.ParseDuration(request.Source.UpdatedInTheLast)
-		if err == nil {
-			updatedInTheLastTime := time.Now().Add(-duration)
-			prUpdatedAfterTime = &updatedInTheLastTime
-			log.Printf("Filtering PRs updated since %v", prUpdatedAfterTime)
-		} else {
-			log.Printf("Error parsing updated_in_the_last field: %v", err)
-		}
-	}
-
-	var pulls []*PullRequest
-	if request.Source.Number != 0 {
-		p, err := manager.GetPullRequestByNumber(request.Source.Number)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get pull request #%d: %s", request.Source.Number, err)
-		}
-		// Apply the state and updated_in_the_last filters that ListPullRequests applies server side.
-		if p != nil && slices.Contains(filterStates, p.State) &&
-			(prUpdatedAfterTime == nil || !p.UpdatedAt.Time.Before(*prUpdatedAfterTime)) {
-			pulls = append(pulls, p)
-		}
-	} else {
-		var err error
-		pulls, err = manager.ListPullRequests(filterStates, request.Source.Branch, prUpdatedAfterTime)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get last commits: %s", err)
-		}
-	}
-
-	disableSkipCI := request.Source.DisableCISkip
-
-	log.Printf("Processing pull requests")
-
-Loop:
 	for _, p := range pulls {
-		// [ci skip]/[skip ci] in Pull request title
-		if !disableSkipCI && ContainsSkipCI(p.Title) {
-			continue
-		}
-
-		// [ci skip]/[skip ci] in Commit message
-		if !disableSkipCI && ContainsSkipCI(p.Tip.Message) {
-			continue
-		}
-
-		// Filter pull request if the BaseBranch does not match the one specified in source
-		if request.Source.BaseBranch != "" && p.PullRequestObject.BaseRefName != request.Source.BaseBranch {
-			continue
-		}
-
-		// Filter out pull request if it does not contain at least one of the desired labels
-		if len(request.Source.Labels) > 0 {
-			labelFound := false
-
-		LabelLoop:
-			for _, wantedLabel := range request.Source.Labels {
-				for _, targetLabel := range p.Labels {
-					if targetLabel.Name == wantedLabel {
-						labelFound = true
-						break LabelLoop
-					}
-				}
-			}
-
-			if !labelFound {
-				continue Loop
-			}
-		}
-
-		// Filter out forks.
-		if request.Source.DisableForks && p.IsCrossRepository {
-			continue
-		}
-
-		// Filter out drafts.
-		if request.Source.IgnoreDrafts && p.IsDraft {
-			continue
-		}
-
-		prAuthorTrusted, err := userTrusted(p.Author.Login, request.Source.TrustedUsers, request.Source.TrustedTeams, manager)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list users in team %v: %s", request.Source.TrustedTeams, err)
-		}
-
-		prApproved := p.ApprovedReviewCount >= request.Source.RequiredReviewApprovals
-
-		if !prAuthorTrusted && !prApproved {
-			continue
-		}
-
-		// Fetch files once if paths/ignore_paths are specified.
-		var files []string
-
-		if len(request.Source.Paths) > 0 || len(request.Source.IgnorePaths) > 0 {
-			files, err = manager.ListModifiedFiles(p.Number)
-			if err != nil {
-				return nil, fmt.Errorf("failed to list modified files: %s", err)
-			}
-		}
-
-		// Skip version if no files match the specified paths.
-		if len(request.Source.Paths) > 0 {
-			var wanted []string
-			for _, pattern := range request.Source.Paths {
-				w, err := FilterPath(files, pattern)
-				if err != nil {
-					return nil, fmt.Errorf("path match failed: %s", err)
-				}
-				wanted = append(wanted, w...)
-			}
-			if len(wanted) == 0 {
-				continue Loop
-			}
-		}
-
-		// Skip version if all files are ignored.
-		if len(request.Source.IgnorePaths) > 0 {
-			wanted := files
-			for _, pattern := range request.Source.IgnorePaths {
-				wanted, err = FilterIgnorePath(wanted, pattern)
-				if err != nil {
-					return nil, fmt.Errorf("ignore path match failed: %s", err)
-				}
-			}
-			if len(wanted) == 0 {
-				continue Loop
-			}
-		}
-
 		version := NewVersion(p)
 		version.ConfigKey = request.Source.ConfigKey
 		response = append(response, version)
@@ -177,6 +52,154 @@ Loop:
 	}
 
 	return response, nil
+}
+
+// filteredPullRequests returns the pull requests that pass the source's filters.
+func filteredPullRequests(source Source, manager Github) ([]*PullRequest, error) {
+	var filtered []*PullRequest
+
+	// Filter out pull request if it does not have a filtered state
+	filterStates := []githubv4.PullRequestState{githubv4.PullRequestStateOpen}
+	if len(source.States) > 0 {
+		filterStates = source.States
+	}
+	log.Printf("Filtering for states: %v", filterStates)
+
+	var prUpdatedAfterTime *time.Time
+	if source.UpdatedInTheLast != "" {
+		duration, err := time.ParseDuration(source.UpdatedInTheLast)
+		if err == nil {
+			updatedInTheLastTime := time.Now().Add(-duration)
+			prUpdatedAfterTime = &updatedInTheLastTime
+			log.Printf("Filtering PRs updated since %v", prUpdatedAfterTime)
+		} else {
+			log.Printf("Error parsing updated_in_the_last field: %v", err)
+		}
+	}
+
+	var pulls []*PullRequest
+	if source.Number != 0 {
+		p, err := manager.GetPullRequestByNumber(source.Number)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pull request #%d: %s", source.Number, err)
+		}
+		// Apply the state and updated_in_the_last filters that ListPullRequests applies server side.
+		if p != nil && slices.Contains(filterStates, p.State) &&
+			(prUpdatedAfterTime == nil || !p.UpdatedAt.Time.Before(*prUpdatedAfterTime)) {
+			pulls = append(pulls, p)
+		}
+	} else {
+		var err error
+		pulls, err = manager.ListPullRequests(filterStates, source.Branch, prUpdatedAfterTime)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get last commits: %s", err)
+		}
+	}
+
+	disableSkipCI := source.DisableCISkip
+
+	log.Printf("Processing pull requests")
+
+Loop:
+	for _, p := range pulls {
+		// [ci skip]/[skip ci] in Pull request title
+		if !disableSkipCI && ContainsSkipCI(p.Title) {
+			continue
+		}
+
+		// [ci skip]/[skip ci] in Commit message
+		if !disableSkipCI && ContainsSkipCI(p.Tip.Message) {
+			continue
+		}
+
+		// Filter pull request if the BaseBranch does not match the one specified in source
+		if source.BaseBranch != "" && p.PullRequestObject.BaseRefName != source.BaseBranch {
+			continue
+		}
+
+		// Filter out pull request if it does not contain at least one of the desired labels
+		if len(source.Labels) > 0 {
+			labelFound := false
+
+		LabelLoop:
+			for _, wantedLabel := range source.Labels {
+				for _, targetLabel := range p.Labels {
+					if targetLabel.Name == wantedLabel {
+						labelFound = true
+						break LabelLoop
+					}
+				}
+			}
+
+			if !labelFound {
+				continue Loop
+			}
+		}
+
+		// Filter out forks.
+		if source.DisableForks && p.IsCrossRepository {
+			continue
+		}
+
+		// Filter out drafts.
+		if source.IgnoreDrafts && p.IsDraft {
+			continue
+		}
+
+		prAuthorTrusted, err := userTrusted(p.Author.Login, source.TrustedUsers, source.TrustedTeams, manager)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list users in team %v: %s", source.TrustedTeams, err)
+		}
+
+		prApproved := p.ApprovedReviewCount >= source.RequiredReviewApprovals
+
+		if !prAuthorTrusted && !prApproved {
+			continue
+		}
+
+		// Fetch files once if paths/ignore_paths are specified.
+		var files []string
+
+		if len(source.Paths) > 0 || len(source.IgnorePaths) > 0 {
+			files, err = manager.ListModifiedFiles(p.Number)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list modified files: %s", err)
+			}
+		}
+
+		// Skip version if no files match the specified paths.
+		if len(source.Paths) > 0 {
+			var wanted []string
+			for _, pattern := range source.Paths {
+				w, err := FilterPath(files, pattern)
+				if err != nil {
+					return nil, fmt.Errorf("path match failed: %s", err)
+				}
+				wanted = append(wanted, w...)
+			}
+			if len(wanted) == 0 {
+				continue Loop
+			}
+		}
+
+		// Skip version if all files are ignored.
+		if len(source.IgnorePaths) > 0 {
+			wanted := files
+			for _, pattern := range source.IgnorePaths {
+				wanted, err = FilterIgnorePath(wanted, pattern)
+				if err != nil {
+					return nil, fmt.Errorf("ignore path match failed: %s", err)
+				}
+			}
+			if len(wanted) == 0 {
+				continue Loop
+			}
+		}
+
+		filtered = append(filtered, p)
+	}
+
+	return filtered, nil
 }
 
 func userTrusted(user string, trustedUsers, trustedTeams []string, manager Github) (bool, error) {
