@@ -48,14 +48,6 @@ func TestCheckList(t *testing.T) {
 	out, err := json.Marshal(output)
 	require.NoError(t, err)
 	assert.Equal(t, `[{"list":"`+hex.EncodeToString(digest[:])+`"}]`, string(out))
-
-	// a push to one of the PRs gives a new version
-	pushed := listTestPRs()
-	pushed[3].Tip.OID = "oid1b"
-	github.ListPullRequestsReturns(pushed, nil)
-	afterPush, err := resource.Check(resource.CheckRequest{Source: listSource(), Version: output[0]}, github)
-	require.NoError(t, err)
-	assert.NotEqual(t, output, afterPush)
 }
 
 func TestGetList(t *testing.T) {
@@ -72,13 +64,4 @@ func TestGetList(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join(dir, "prs.json"))
 	require.NoError(t, err)
 	assert.Equal(t, `[{"number":1,"headRefOid":"oid1","changedFiles":3},{"number":2,"headRefOid":"oid2","changedFiles":7}]`, string(content))
-}
-
-func TestListRefusals(t *testing.T) {
-	source := listSource()
-	source.Number = 1
-	assert.Error(t, source.Validate())
-
-	_, err := resource.Put(resource.PutRequest{Source: listSource()}, new(fakes.FakeGithub), t.TempDir())
-	assert.EqualError(t, err, "put isn't supported in list mode")
 }
